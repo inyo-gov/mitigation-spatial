@@ -1,0 +1,34 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Mitigation Spatial"
+  navbar:
+    title: "Mitigation Spatial"
+    logo: www/inyo_logo.png
+    left:
+      - href: index.qmd
+        text: Downloads
+      - href: data_processing.qmd
+        text: Data Processing
+      - icon: github
+        href: https://github.com/zach-nelson/mitigation-spatial
+    background: dark
+    search: true
+format:
+  html:
+    theme: cosmo
+    linkcolor: "#2E86AB"
+    css: styles.css
+    toc: false
+    code-fold: true
+    code-tools: true
+    fig-responsive: true
+    table-responsive: false
+    fig-dir: figure-html
+    subtitle: "Inyo County, California"
+    footer: "© 2025 Inyo County, California. All rights reserved."
+
+editor: visual
+

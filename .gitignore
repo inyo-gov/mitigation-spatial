@@ -1,0 +1,44 @@
+# Ignore R history and session data
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Ignore system files
+.DS_Store
+.Renviron
+.config/
+
+# Ignore Quarto configuration and build artifacts
+/.quarto/
+
+# Ignore cache directories
+*_cache/
+*_files/
+
+# Development artifacts
+*.knit.md
+*_cache/
+*_files/
+index_cache/
+index_files/
+
+# Backup files
+*_backup.*
+*_test.*
+test_*
+simple_*
+
+# Temporary files
+*.tmp
+*.temp
+*_corrected.*
+*_with_zeroes.*
+packages-from-*.txt
+
+# Large data packages
+*.zip
+
+# Ignore output directory (will be generated)
+output/
+

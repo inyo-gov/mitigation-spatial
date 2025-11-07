@@ -1,0 +1,75 @@
+---
+title: "Mitigation Points Downloads"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    code-tools: true
+    embed-resources: true
+    css: styles.css
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Overview
+
+This document provides mitigation project data from two sources: 1. **Popup Info and Project Status Data**: Point locations with project status information from a Google Sheet (last updated 2025), downloaded as CSV and converted to shapefile/GeoJSON for download 2. **Mitigation Polygons**: Polygon boundaries from the mitigation sites polygons used in the AGOL Web Map.
+
+Both datasets include project names, types, and descriptions for various mitigation projects across the region.
+
+## Data Sources and Metadata
+
+These datasets correspond to the layers displayed on the [AGOL Mitigation Web Map](https://experience.arcgis.com/experience/44b652a16c4b443b9b4a2e7dc3fcbb91/?draft=true&org=inyocounty). The data provided here includes the same spatial boundaries and project information, with real-time status updates from the source CSV and shapefile files.
+
+### Popup Info and Project Status Data
+
+**Source**: `data/gis/Mitigation_PointsAGOL.csv`
+
+**Description**: This dataset contains point locations for mitigation projects with popup information and project status data. The data originates from a Google Sheet used to track and update the status of mitigation projects (last updated 2025). The Google Sheet is synchronized with the AGOL mitigation map to provide real-time status updates. Here, the data was downloaded as a CSV file and converted to shapefile and GeoJSON formats for interested parties to download and use. Each point represents a mitigation project location with associated attributes including current project status (e.g., "Implemented and ongoing", "Fully implemented, but not meeting goals").
+
+**Downloads**:
+-   **GeoJSON**: [mitigation_points.geojson](mitigation_points.geojson)
+-   **Shapefile (ZIP)**: [mitigation_points_shp.zip](mitigation_points_shp.zip)
+
+**Columns**: 
+- **POPUP NAME**: Project name/identifier
+- **PROJECT_TYPE_2**: Type of project (Habitat, Recreation, Revegetation, Agriculture, Civic)
+- **ACRES**: Project area in acres
+- **Project_Status**: Implementation status with real-time updates from the source Google Sheet
+- **Latitude/Longitude**: Point coordinates (WGS84)
+- **DESCRIPTION**: Detailed project description
+- **IMPACT**: Project impact description
+- **DISCUSSION**: Additional discussion/notes
+- **TYPE**: Project type classification
+- **ORIGIN**: Origin/source of the project requirement
+
+### Mitigation Polygons
+
+**Source**: `data/gis/mit_points/mitigation_sites.shp`
+
+**Description**: This dataset contains polygon boundaries for mitigation sites, corresponding to the polygon layer on the AGOL mitigation map. The shapefile includes the same polygon boundaries displayed on the web map, with project attributes and descriptions. These polygons represent the spatial extent of mitigation projects.
+
+**Downloads**:
+-   **GeoJSON**: [mitigation_sites.geojson](mitigation_sites.geojson)
+-   **Shapefile (ZIP)**: [mitigation_sites_shp.zip](mitigation_sites_shp.zip)
+
+**Important Note on Multipart Polygons**: The original shapefile contains 75 project records, all stored as MULTIPOLYGON geometry types. When a mitigation project is spatially broken apart (e.g., a project with multiple non-contiguous parcels), it is stored as a single MULTIPOLYGON feature with multiple parts. However, for shapefile compatibility and easier use in GIS software, the exported shapefile converts these MULTIPOLYGON features to individual POLYGON features. This means:
+
+- **Original data**: 75 project records (some with multiple spatial parts)
+- **Exported shapefile**: 90 polygon features (multipart polygons split into individual polygons)
+- **Result**: Some project names and attributes will appear multiple times in the exported shapefile, with each row representing a different spatial part of the same project
+
+For example, if "Project A" has 3 separate parcels, it will appear as 3 rows in the exported shapefile, all with the same project name and attributes, but with different polygon geometries representing each parcel. This allows users to work with individual polygon parts while maintaining the project attribute information.
+
+**Columns**: 
+- **Name**: Project name/identifier
+- **TYPE**: Project type (e.g., "Habitat MOU", "Habitat MOU 1600 AF")
+- **Acres**: Project area in acres
+- **UID**: Unique identifier
+- **Sidebar_DE**: Sidebar description text
+- **Sidebar_Ph**: Link to project photos/maps
+- **geometry**: Polygon boundaries

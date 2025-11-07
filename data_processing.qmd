@@ -1,0 +1,674 @@
+---
+title: "Data Processing"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    code-tools: true
+    embed-resources: true
+    css: styles.css
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Setup
+
+This section loads and processes the data for visualization and analysis. The setup code also generates the download files available on the main page.
+
+```{r setup}
+#| echo: true
+#| message: false
+#| warning: false
+
+# Load all required libraries
+library(DT)
+library(ggplot2)
+library(ggrepel)
+library(sf)
+library(dplyr)
+library(readr)
+library(RColorBrewer)
+
+# Export data for downloads (same code as index.qmd setup)
+# Load CSV data
+mitigation_data_export <- read_csv("data/gis/Mitigation_PointsAGOL.csv", show_col_types = FALSE)
+mitigation_data_export <- mitigation_data_export %>%
+  filter(!is.na(Latitude) & !is.na(Longitude))
+
+# Normalize project names
+popup_name_col_export <- if ("POPUP NAME" %in% names(mitigation_data_export)) "POPUP NAME" else if ("POPUP_NAME" %in% names(mitigation_data_export)) "POPUP_NAME" else NULL
+if (!is.null(popup_name_col_export)) {
+  mitigation_data_export[[popup_name_col_export]] <- gsub("129/ 118", "129/118", mitigation_data_export[[popup_name_col_export]], fixed = TRUE)
+  mitigation_data_export[[popup_name_col_export]] <- gsub("  ", " ", mitigation_data_export[[popup_name_col_export]])
+  mitigation_data_export[[popup_name_col_export]] <- trimws(mitigation_data_export[[popup_name_col_export]])
+}
+
+# Convert CSV to spatial points
+mitigation_sf_export <- st_as_sf(
+  mitigation_data_export,
+  coords = c("Longitude", "Latitude"),
+  crs = 4326
+)
+
+# Load shapefile data
+mitigation_sites_sf_export <- st_read("data/gis/mit_points/mitigation_sites.shp", quiet = TRUE) %>%
+  st_transform(4326)
+
+# Export data
+if (!dir.exists("output")) dir.create("output", recursive = TRUE)
+if (!dir.exists("docs")) dir.create("docs", recursive = TRUE)
+
+tryCatch({
+  write_sf(mitigation_sf_export, "output/mitigation_points.geojson", delete_dsn = TRUE)
+  write_sf(mitigation_sf_export, "docs/mitigation_points.geojson", delete_dsn = TRUE)
+}, error = function(e) cat("Warning: Could not export CSV points to GeoJSON\n"))
+
+tryCatch({
+  if (exists("mitigation_sites_sf_export") && nrow(mitigation_sites_sf_export) > 0) {
+    mitigation_sites_sf_geojson <- st_cast(mitigation_sites_sf_export, "MULTIPOLYGON") %>%
+      st_cast("POLYGON") %>%
+      st_simplify(dTolerance = 0.001)
+    
+    write_sf(mitigation_sites_sf_geojson, "output/mitigation_sites.geojson", delete_dsn = TRUE)
+    write_sf(mitigation_sites_sf_geojson, "docs/mitigation_sites.geojson", delete_dsn = TRUE)
+  }
+}, error = function(e) cat("Warning: Could not export shapefile polygons to GeoJSON:", conditionMessage(e), "\n"))
+
+if (!dir.exists("output/mitigation_points_shp")) dir.create("output/mitigation_points_shp", recursive = TRUE)
+if (!dir.exists("docs/mitigation_points_shp")) dir.create("docs/mitigation_points_shp", recursive = TRUE)
+
+tryCatch({
+  st_write(mitigation_sf_export, "output/mitigation_points_shp/mitigation_points.shp", delete_dsn = TRUE)
+  st_write(mitigation_sf_export, "docs/mitigation_points_shp/mitigation_points.shp", delete_dsn = TRUE)
+  
+  zip("output/mitigation_points_shp.zip", 
+      list.files("output/mitigation_points_shp", full.names = TRUE),
+      flags = "-j")
+  file.copy("output/mitigation_points_shp.zip", "docs/mitigation_points_shp.zip", overwrite = TRUE)
+}, error = function(e) cat("Warning: Could not export CSV points shapefile\n"))
+
+if (!dir.exists("output/mitigation_sites_shp")) dir.create("output/mitigation_sites_shp", recursive = TRUE)
+if (!dir.exists("docs/mitigation_sites_shp")) dir.create("docs/mitigation_sites_shp", recursive = TRUE)
+
+tryCatch({
+  if (exists("mitigation_sites_sf_export") && nrow(mitigation_sites_sf_export) > 0) {
+    mitigation_sites_sf_simple <- st_cast(mitigation_sites_sf_export, "MULTIPOLYGON") %>%
+      st_cast("POLYGON") %>%
+      st_simplify(dTolerance = 0.001)
+    
+    st_write(mitigation_sites_sf_simple, "output/mitigation_sites_shp/mitigation_sites.shp", delete_dsn = TRUE)
+    st_write(mitigation_sites_sf_simple, "docs/mitigation_sites_shp/mitigation_sites.shp", delete_dsn = TRUE)
+    
+    shp_files <- list.files("output/mitigation_sites_shp", full.names = TRUE, pattern = "\\.(shp|shx|dbf|prj)$")
+    if (length(shp_files) > 0) {
+      zip("output/mitigation_sites_shp.zip", shp_files, flags = "-j")
+      if (file.exists("output/mitigation_sites_shp.zip")) {
+        file.copy("output/mitigation_sites_shp.zip", "docs/mitigation_sites_shp.zip", overwrite = TRUE)
+      }
+    }
+  }
+}, error = function(e) cat("Warning: Could not export polygon shapefile:", conditionMessage(e), "\n"))
+
+# Load CSV data
+mitigation_data <- read_csv("data/gis/Mitigation_PointsAGOL.csv", show_col_types = FALSE)
+mitigation_data <- mitigation_data %>%
+  filter(!is.na(Latitude) & !is.na(Longitude))
+
+# Normalize project names to match shapefile naming (remove extra spaces)
+popup_name_col <- if ("POPUP NAME" %in% names(mitigation_data)) "POPUP NAME" else if ("POPUP_NAME" %in% names(mitigation_data)) "POPUP_NAME" else NULL
+if (!is.null(popup_name_col)) {
+  mitigation_data[[popup_name_col]] <- gsub("129/ 118", "129/118", mitigation_data[[popup_name_col]], fixed = TRUE)
+  # Also normalize any other common spacing issues
+  mitigation_data[[popup_name_col]] <- gsub("  ", " ", mitigation_data[[popup_name_col]])  # Remove double spaces
+  mitigation_data[[popup_name_col]] <- trimws(mitigation_data[[popup_name_col]])  # Trim whitespace
+}
+
+# Convert CSV to spatial points
+mitigation_sf <- st_as_sf(
+  mitigation_data,
+  coords = c("Longitude", "Latitude"),
+  crs = 4326
+)
+
+# Create popup text for CSV points
+popup_name_col <- if ("POPUP NAME" %in% names(mitigation_sf)) "POPUP NAME" else if ("POPUP_NAME" %in% names(mitigation_sf)) "POPUP_NAME" else NULL
+
+if (!is.null(popup_name_col)) {
+  project_names <- ifelse(is.na(mitigation_sf[[popup_name_col]]), "Project", mitigation_sf[[popup_name_col]])
+} else {
+  project_names <- rep("Project", nrow(mitigation_sf))
+}
+
+mitigation_sf$popup_text <- paste0(
+  "<b>", project_names, "</b><br>",
+  ifelse(!is.na(mitigation_sf$PROJECT_TYPE_2), paste0("Type: ", mitigation_sf$PROJECT_TYPE_2, "<br>"), ""),
+  ifelse(!is.na(mitigation_sf$ACRES), paste0("Acres: ", mitigation_sf$ACRES, "<br>"), ""),
+  ifelse(!is.na(mitigation_sf$Project_Status), paste0("Status: ", mitigation_sf$Project_Status, "<br>"), ""),
+  ifelse(!is.na(mitigation_sf$DESCRIPTION), paste0("Description: ", substr(mitigation_sf$DESCRIPTION, 1, 200), "..."), "")
+)
+
+# Create color palette for CSV points (for ggplot)
+if ("PROJECT_TYPE_2" %in% names(mitigation_sf)) {
+  project_types <- unique(mitigation_sf$PROJECT_TYPE_2)
+  project_types <- project_types[!is.na(project_types)]
+  # Create named vector of colors for ggplot
+  n_types <- length(project_types)
+  project_colors_vec <- RColorBrewer::brewer.pal(min(n_types, 9), "Set1")
+  if (n_types > 9) {
+    project_colors_vec <- c(project_colors_vec, RColorBrewer::brewer.pal(min(n_types - 9, 8), "Set2"))
+  }
+  project_colors <- setNames(project_colors_vec[1:n_types], project_types)
+} else {
+  project_colors <- NULL
+}
+
+# Load shapefile data
+mitigation_sites_sf <- st_read("data/gis/mit_points/mitigation_sites.shp", quiet = TRUE) %>%
+  st_transform(4326)
+
+# Create popup text for shapefile polygons
+mitigation_sites_sf <- mitigation_sites_sf %>%
+  mutate(
+    popup_name = ifelse(is.na(Name) | Name == "", "Project", as.character(Name)),
+    popup_type = ifelse(is.na(TYPE) | TYPE == "", "", paste0("Type: ", TYPE, "<br>")),
+    popup_acres = ifelse(is.na(Acres), "", paste0("Acres: ", round(Acres, 1), "<br>")),
+    popup_desc = ifelse(is.na(Sidebar_DE) | Sidebar_DE == "", "", paste0("Description: ", substr(Sidebar_DE, 1, 200), "...")),
+    popup_text = paste0("<b>", popup_name, "</b><br>", popup_type, popup_acres, popup_desc)
+  ) %>%
+  select(-popup_name, -popup_type, -popup_acres, -popup_desc)
+
+# Create color palette for shapefile polygons (for ggplot)
+if ("TYPE" %in% names(mitigation_sites_sf)) {
+  site_types <- unique(mitigation_sites_sf$TYPE)
+  site_types <- site_types[!is.na(site_types)]
+  # Create named vector of colors for ggplot
+  n_types <- length(site_types)
+  site_colors_vec <- RColorBrewer::brewer.pal(min(n_types, 8), "Set2")
+  if (n_types > 8) {
+    site_colors_vec <- c(site_colors_vec, RColorBrewer::brewer.pal(min(n_types - 8, 9), "Set1"))
+  }
+  site_colors <- setNames(site_colors_vec[1:n_types], site_types)
+} else {
+  site_colors <- NULL
+}
+
+# Prepare CSV table data - simplified to just POPUP NAME for testing
+popup_col <- if ("POPUP NAME" %in% names(mitigation_data)) "POPUP NAME" else if ("POPUP_NAME" %in% names(mitigation_data)) "POPUP_NAME" else NULL
+
+if (!is.null(popup_col) && popup_col %in% names(mitigation_data)) {
+  mitigation_table_data <- mitigation_data %>%
+    select(all_of(popup_col)) %>%
+    rename(`POPUP NAME` = all_of(popup_col))
+} else {
+  mitigation_table_data <- data.frame(`POPUP NAME` = character(0))
+}
+
+# Prepare shapefile table data
+shapefile_table_data <- mitigation_sites_sf %>%
+  st_drop_geometry() %>%
+  select(Name, TYPE, Acres, Sidebar_DE, UID) %>%
+  mutate(Acres = round(Acres, 1))
+
+colnames(shapefile_table_data) <- gsub("_", " ", colnames(shapefile_table_data))
+
+# Create filtered versions for maps only (exclude Haiwee for better zoom)
+# Original data remains unfiltered for tables and downloads
+popup_name_col <- if ("POPUP NAME" %in% names(mitigation_sf)) "POPUP NAME" else if ("POPUP_NAME" %in% names(mitigation_sf)) "POPUP_NAME" else NULL
+if (!is.null(popup_name_col)) {
+  mitigation_sf_map <- mitigation_sf %>%
+    filter(!grepl("Haiwee|haiwee", !!sym(popup_name_col), ignore.case = TRUE))
+} else {
+  mitigation_sf_map <- mitigation_sf
+}
+
+# Create filtered version of shapefile for maps only
+mitigation_sites_sf_map <- mitigation_sites_sf %>%
+  filter(!grepl("Haiwee|haiwee", Name, ignore.case = TRUE))
+
+cat("Setup complete. Data loaded and prepared.\n")
+```
+
+## Data Descriptions
+
+### CSV Points Data Description
+
+```{r csv-data-description}
+#| echo: true
+
+cat("=== CSV Points Data Description ===\n")
+cat("Total rows:", nrow(mitigation_data), "\n")
+cat("Rows with valid coordinates:", nrow(mitigation_data), "\n")
+cat("Columns:", ncol(mitigation_data), "\n")
+cat("\nGeometry Information:\n")
+cat("Geometry type:", st_geometry_type(mitigation_sf, by_geometry = FALSE), "\n")
+cat("Unique geometry types:", paste(unique(st_geometry_type(mitigation_sf)), collapse = ", "), "\n")
+cat("Has geometry column:", !is.null(st_geometry(mitigation_sf)), "\n")
+cat("\nColumn names:\n")
+print(names(mitigation_data))
+cat("\nData structure:\n")
+str(mitigation_data, give.attr = FALSE)
+cat("\nFirst few rows:\n")
+print(head(mitigation_data, 3))
+```
+
+### Mitigation Polygons Data Description
+
+```{r shapefile-data-description}
+#| echo: true
+
+cat("=== Mitigation Polygons Data Description ===\n")
+cat("Total rows:", nrow(mitigation_sites_sf), "\n")
+cat("Columns:", ncol(mitigation_sites_sf), "\n")
+cat("\nGeometry Information:\n")
+cat("Geometry type:", st_geometry_type(mitigation_sites_sf, by_geometry = FALSE), "\n")
+cat("Unique geometry types:", paste(unique(st_geometry_type(mitigation_sites_sf)), collapse = ", "), "\n")
+cat("Has geometry column:", !is.null(st_geometry(mitigation_sites_sf)), "\n")
+cat("\nGeometry type breakdown:\n")
+geom_types <- st_geometry_type(mitigation_sites_sf)
+geom_type_table <- table(geom_types)
+print(geom_type_table)
+cat("\nColumn names:\n")
+print(names(mitigation_sites_sf %>% st_drop_geometry()))
+cat("\nData structure:\n")
+str(mitigation_sites_sf %>% st_drop_geometry(), give.attr = FALSE)
+cat("\nFirst few rows:\n")
+print(head(mitigation_sites_sf %>% st_drop_geometry(), 3))
+```
+
+## Interactive Data Tables
+
+### CSV Points Data
+
+This table shows data from the CSV file, which includes real-time updates on project status.
+
+```{r csv-points-table}
+#| echo: false
+
+# Test with simple print table first - show all rows
+cat("Total rows:", nrow(mitigation_table_data), "\n")
+print(mitigation_table_data, n = Inf)
+
+# Also try DT table
+DT::datatable(
+  mitigation_table_data,
+  caption = 'Mitigation Points from CSV - Includes Real-Time Project Status Updates',
+  filter = 'top',
+  elementId = 'csv-points-table',
+  options = list(
+    pageLength = -1,
+    scrollX = TRUE,
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    columnDefs = list(
+      list(targets = '_all', className = 'dt-wrap')
+    ),
+    autoWidth = TRUE,
+    lengthMenu = list(c(10, 25, 50, 100, -1), c('10', '25', '50', '100', 'All'))
+  ),
+  rownames = FALSE,
+  extensions = c('Buttons', 'Scroller'),
+  escape = FALSE,
+  style = 'bootstrap',
+  callback = htmlwidgets::JS("
+    function(settings) {
+      var api = new $.fn.dataTable.Api(settings);
+      api.on('draw', function() {
+        $(api.table().container()).find('td, th').css({
+          'white-space': 'normal',
+          'word-wrap': 'break-word',
+          'word-break': 'break-word',
+          'overflow-wrap': 'break-word'
+        });
+      });
+      $(api.table().container()).find('td, th').css({
+        'white-space': 'normal',
+        'word-wrap': 'break-word',
+        'word-break': 'break-word',
+        'overflow-wrap': 'break-word'
+      });
+    }
+  ")
+)
+```
+
+### Mitigation Polygons Data
+
+This table shows data from the mitigation polygons.
+
+```{r shapefile-polygons-table}
+#| echo: false
+
+DT::datatable(
+  shapefile_table_data,
+    caption = 'Mitigation Polygons Data',
+  filter = 'top',
+  elementId = 'shapefile-polygons-table',
+  options = list(
+    pageLength = -1,
+    scrollX = TRUE,
+    scrollY = '600px',
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    columnDefs = list(
+      list(className = 'dt-center', targets = which(colnames(shapefile_table_data) %in% c('Acres', 'UID'))),
+      list(targets = '_all', className = 'dt-wrap')
+    ),
+    autoWidth = TRUE,
+    lengthMenu = list(c(10, 25, 50, 100, -1), c('10', '25', '50', '100', 'All'))
+  ),
+  rownames = FALSE,
+  extensions = c('Buttons', 'Scroller'),
+  escape = FALSE,
+  style = 'bootstrap',
+  callback = htmlwidgets::JS("
+    function(settings) {
+      var api = new $.fn.dataTable.Api(settings);
+      api.on('draw', function() {
+        $(api.table().container()).find('td, th').css({
+          'white-space': 'normal',
+          'word-wrap': 'break-word',
+          'word-break': 'break-word',
+          'overflow-wrap': 'break-word'
+        });
+      });
+      $(api.table().container()).find('td, th').css({
+        'white-space': 'normal',
+        'word-wrap': 'break-word',
+        'word-break': 'break-word',
+        'overflow-wrap': 'break-word'
+      });
+    }
+  ")
+)
+```
+
+### Project Name Comparison
+
+This section compares project names between the CSV points and mitigation polygons to identify projects that appear in one dataset but not the other.
+
+```{r project-comparison}
+#| echo: false
+
+# Get project names from CSV (unfiltered for comparison)
+popup_name_col <- if ("POPUP NAME" %in% names(mitigation_data)) "POPUP NAME" else if ("POPUP_NAME" %in% names(mitigation_data)) "POPUP_NAME" else NULL
+
+if (!is.null(popup_name_col)) {
+  csv_projects <- mitigation_data %>%
+    pull(!!sym(popup_name_col)) %>%
+    unique() %>%
+    sort()
+} else {
+  csv_projects <- character(0)
+}
+
+# Get project names from shapefile (unfiltered for comparison)
+shapefile_projects <- mitigation_sites_sf %>%
+  st_drop_geometry() %>%
+  pull(Name) %>%
+  unique() %>%
+  sort()
+
+# Find differences
+csv_only <- setdiff(csv_projects, shapefile_projects)
+shapefile_only <- setdiff(shapefile_projects, csv_projects)
+in_both <- intersect(csv_projects, shapefile_projects)
+
+# Print summary statistics
+cat("=== Project Comparison Summary ===\n\n")
+cat("Total projects in CSV (after filtering):", length(csv_projects), "\n")
+cat("Total projects in Shapefile (after filtering):", length(shapefile_projects), "\n")
+cat("Projects in BOTH datasets:", length(in_both), "\n")
+cat("Projects ONLY in CSV:", length(csv_only), "\n")
+cat("Projects ONLY in Shapefile:", length(shapefile_only), "\n\n")
+
+# Create detailed comparison tables
+if (length(in_both) > 0) {
+  cat("=== Projects in BOTH Datasets (", length(in_both), " projects) ===\n")
+  in_both_df <- data.frame(
+    Project_Name = in_both,
+    In_CSV = "Yes",
+    In_Shapefile = "Yes"
+  )
+  print(in_both_df, row.names = FALSE)
+  cat("\n")
+}
+
+if (length(csv_only) > 0) {
+  cat("=== Projects ONLY in CSV Dataset (", length(csv_only), " projects) ===\n")
+  csv_only_df <- data.frame(
+    Project_Name = csv_only,
+    In_CSV = "Yes",
+    In_Shapefile = "No"
+  )
+  print(csv_only_df, row.names = FALSE)
+  cat("\n")
+}
+
+if (length(shapefile_only) > 0) {
+  cat("=== Projects ONLY in Shapefile Dataset (", length(shapefile_only), " projects) ===\n")
+  shapefile_only_df <- data.frame(
+    Project_Name = shapefile_only,
+    In_CSV = "No",
+    In_Shapefile = "Yes"
+  )
+  print(shapefile_only_df, row.names = FALSE)
+  cat("\n")
+}
+
+# Create interactive comparison table
+comparison_detailed <- data.frame(
+  Project_Name = c(
+    if (length(in_both) > 0) in_both else character(0),
+    if (length(csv_only) > 0) csv_only else character(0),
+    if (length(shapefile_only) > 0) shapefile_only else character(0)
+  ),
+  In_CSV = c(
+    if (length(in_both) > 0) rep("Yes", length(in_both)) else character(0),
+    if (length(csv_only) > 0) rep("Yes", length(csv_only)) else character(0),
+    if (length(shapefile_only) > 0) rep("No", length(shapefile_only)) else character(0)
+  ),
+  In_Shapefile = c(
+    if (length(in_both) > 0) rep("Yes", length(in_both)) else character(0),
+    if (length(csv_only) > 0) rep("No", length(csv_only)) else character(0),
+    if (length(shapefile_only) > 0) rep("Yes", length(shapefile_only)) else character(0)
+  ),
+  Status = c(
+    if (length(in_both) > 0) rep("In Both", length(in_both)) else character(0),
+    if (length(csv_only) > 0) rep("CSV Only", length(csv_only)) else character(0),
+    if (length(shapefile_only) > 0) rep("Shapefile Only", length(shapefile_only)) else character(0)
+  )
+)
+
+if (nrow(comparison_detailed) > 0) {
+  DT::datatable(
+    comparison_detailed,
+    caption = 'Detailed Project Comparison: CSV Points vs Mitigation Polygons',
+    filter = 'top',
+    elementId = 'project-comparison-table',
+    options = list(
+      pageLength = -1,
+      scrollX = TRUE,
+      scrollY = '600px',
+      dom = 'Blfrtip',
+      buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+      columnDefs = list(
+        list(className = 'dt-center', targets = c(1, 2, 3)),
+        list(targets = '_all', className = 'dt-wrap')
+      ),
+      autoWidth = TRUE,
+      lengthMenu = list(c(10, 25, 50, 100, -1), c('10', '25', '50', '100', 'All')),
+      order = list(list(3, 'asc'), list(0, 'asc'))  # Sort by Status, then Project Name
+    ),
+    rownames = FALSE,
+    extensions = c('Buttons', 'Scroller'),
+    escape = FALSE,
+    style = 'bootstrap',
+    callback = htmlwidgets::JS("
+      function(settings) {
+        var api = new $.fn.dataTable.Api(settings);
+        api.on('draw', function() {
+          $(api.table().container()).find('td, th').css({
+            'white-space': 'normal',
+            'word-wrap': 'break-word',
+            'word-break': 'break-word',
+            'overflow-wrap': 'break-word'
+          });
+        });
+        $(api.table().container()).find('td, th').css({
+          'white-space': 'normal',
+          'word-wrap': 'break-word',
+          'word-break': 'break-word',
+          'overflow-wrap': 'break-word'
+        });
+      }
+    ")
+  )
+} else {
+  cat("No projects found for comparison.\n")
+}
+```
+
+## Maps
+
+### CSV Points - 2025 Status
+
+```{r csv-points-map}
+#| echo: false
+#| fig-cap: "Map showing mitigation project points from CSV data with project names labeled. Note: Haiwee site not shown."
+#| fig-width: 24
+#| fig-height: 16
+
+if (exists("mitigation_sf_map") && nrow(mitigation_sf_map) > 0) {
+  # Get bounding box for map extent
+  bbox <- st_bbox(mitigation_sf_map)
+  
+  # Create ggplot map
+  p <- ggplot() +
+    geom_sf(
+      data = mitigation_sf_map,
+      aes(color = if(!is.null(project_colors) && "PROJECT_TYPE_2" %in% names(mitigation_sf_map)) PROJECT_TYPE_2 else NULL),
+      size = 2,
+      alpha = 0.7
+    ) +
+    geom_text_repel(
+      data = mitigation_sf_map,
+      aes(label = `POPUP NAME`, geometry = geometry),
+      stat = "sf_coordinates",
+      size = 2.5,
+      min.segment.length = 0,
+      max.overlaps = Inf,
+      box.padding = 0.5,
+      point.padding = 0.3
+    ) +
+    coord_sf(
+      xlim = c(bbox["xmin"], bbox["xmax"]),
+      ylim = c(bbox["ymin"], bbox["ymax"]),
+      expand = TRUE
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_blank(),
+      panel.grid = element_line(color = "gray90", linewidth = 0.5),
+      panel.background = element_rect(fill = "white", color = NA),
+      legend.position = "right"
+    )
+  
+  # Add color scale if project types exist
+  if (!is.null(project_colors) && "PROJECT_TYPE_2" %in% names(mitigation_sf_map)) {
+    p <- p +
+      scale_color_manual(
+        values = project_colors,
+        name = "Project Type"
+      ) +
+      guides(color = guide_legend(override.aes = list(size = 3)))
+  } else {
+    p <- p + scale_color_manual(values = "#FF0000", guide = "none")
+  }
+  
+  print(p)
+} else {
+  cat("No data available for map\n")
+}
+```
+
+### Mitigation Polygons
+
+```{r shapefile-polygons-map}
+#| echo: false
+#| fig-cap: "Map showing mitigation polygons with project names labeled."
+#| fig-width: 24
+#| fig-height: 16
+
+if (exists("mitigation_sites_sf_map") && nrow(mitigation_sites_sf_map) > 0) {
+  # Simplify geometry for faster rendering
+  mitigation_sites_sf_simple <- st_simplify(mitigation_sites_sf_map, dTolerance = 0.001)
+  
+  # Get centroids for labels
+  centroids <- st_centroid(mitigation_sites_sf_simple)
+  centroids$Name <- mitigation_sites_sf_map$Name
+  
+  # Get bounding box for map extent
+  bbox <- st_bbox(mitigation_sites_sf_simple)
+  
+  # Create ggplot map
+  p <- ggplot() +
+    geom_sf(
+      data = mitigation_sites_sf_simple,
+      aes(fill = if(!is.null(site_colors) && "TYPE" %in% names(mitigation_sites_sf_simple)) TYPE else NULL),
+      color = if(!is.null(site_colors) && "TYPE" %in% names(mitigation_sites_sf_simple)) "white" else "#0066FF",
+      alpha = 0.4,
+      linewidth = 0.5
+    ) +
+    geom_sf(
+      data = centroids,
+      size = 1,
+      color = "black",
+      alpha = 0.6
+    ) +
+    geom_text_repel(
+      data = centroids,
+      aes(label = Name, geometry = geometry),
+      stat = "sf_coordinates",
+      size = 2.5,
+      min.segment.length = 0,
+      max.overlaps = Inf,
+      box.padding = 0.5,
+      point.padding = 0.3
+    ) +
+    coord_sf(
+      xlim = c(bbox["xmin"], bbox["xmax"]),
+      ylim = c(bbox["ymin"], bbox["ymax"]),
+      expand = TRUE
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_blank(),
+      panel.grid = element_line(color = "gray90", linewidth = 0.5),
+      panel.background = element_rect(fill = "white", color = NA),
+      legend.position = "right"
+    )
+  
+  # Add color scale if types exist
+  if (!is.null(site_colors) && "TYPE" %in% names(mitigation_sites_sf_map)) {
+    p <- p +
+      scale_fill_manual(
+        values = site_colors,
+        name = "Project Type"
+      ) +
+      guides(fill = guide_legend(override.aes = list(alpha = 0.7)))
+  } else {
+    p <- p + scale_fill_manual(values = "#0066FF", guide = "none")
+  }
+  
+  print(p)
+} else {
+  cat("No data available for map\n")
+}
+```
+
