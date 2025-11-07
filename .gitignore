@@ -38,6 +38,8 @@ packages-from-*.txt
 
 # Large data packages
 *.zip
+# But allow zip files in docs directory for downloads
+!docs/*.zip
 
 # Ignore output directory (will be generated)
 output/
