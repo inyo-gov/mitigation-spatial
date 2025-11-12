@@ -47,7 +47,7 @@ Spatial data files are available for download:
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/zach-nelson/mitigation-spatial.git
+   git clone https://github.com/inyo-gov/mitigation-spatial.git
    cd mitigation-spatial
    ```
 
@@ -81,17 +81,18 @@ Spatial data files are available for download:
 
 ## Contact & Support
 
-- **Repository**: [github.com/zach-nelson/mitigation-spatial](https://github.com/zach-nelson/mitigation-spatial)
-- **Live Website**: [zach-nelson.github.io/mitigation-spatial](https://zach-nelson.github.io/mitigation-spatial)
-- **Issues**: [Report bugs or request features](https://github.com/zach-nelson/mitigation-spatial/issues)
+- **Repository**: [github.com/inyo-gov/mitigation-spatial](https://github.com/inyo-gov/mitigation-spatial)
+- **Live Website**: [inyo-gov.github.io/mitigation-spatial](https://inyo-gov.github.io/mitigation-spatial)
+- **Issues**: [Report bugs or request features](https://github.com/inyo-gov/mitigation-spatial/issues)
 
 ## License
 
 MIT License
 
-Copyright (c) 2025 Zach Nelson
+Copyright (c) 2025 Inyo County
 
 ---
 
 *Last updated: November 2025*
+
 
